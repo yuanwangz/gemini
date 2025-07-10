@@ -534,7 +534,7 @@ const transformCandidates = (key, cand) => {
         }
       });
     } else {
-      const hasThought = part.thought && part.thought.trim() !== '';
+      const hasThought = part.thought;
 
       // 1. 如果当前 part 有 thought，并且我们尚未开启 <think> 标签
       if (hasThought && !isThinking) {
