@@ -537,19 +537,14 @@ const transformCandidates = (key, cand) => {
       const hasThought = part.thought;
 
       // 1. 如果当前 part 有 thought，并且我们尚未开启 <think> 标签
-      if (hasThought && !isThinking) {
-        message.content.push('<think>');
-        isThinking = true; // 标记已进入思考状态
+      if (hasThought && !isThinking && part.text) {
+        message.content.push('<think>' + part.text);
+        isThinking = true;
       }
       // 2. 如果当前 part 没有 thought，但我们之前开启了 <think> 标签
-      else if (!hasThought && isThinking) {
-        message.content.push('</think>');
-        isThinking = false; // 标记已退出思考状态
-      }
-
-      // 将 part.text 推入数组（如果存在）
-      if (part.text) {
-        message.content.push(part.text);
+      else if (!hasThought && isThinking && part.text) {
+        message.content.push('</think>' + part.text);
+        isThinking = false;
       }
     }
   }
