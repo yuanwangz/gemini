@@ -517,8 +517,12 @@ const reasonsMap = { //https://ai.google.dev/api/rest/v1/GenerateContentResponse
 const SEP = "\n\n|>";
 const transformCandidates = (key, cand) => {
   const message = { role: "assistant", content: [] };
+  // 状态变量，用于跟踪是否在 <think> 块内部
+  let isThinking = false;
+
   for (const part of cand.content?.parts ?? []) {
     if (part.functionCall) {
+      // 按照指示，此处不再检查并闭合 <think> 标签，保持逻辑简洁
       const fc = part.functionCall;
       message.tool_calls = message.tool_calls ?? [];
       message.tool_calls.push({
@@ -530,18 +534,40 @@ const transformCandidates = (key, cand) => {
         }
       });
     } else {
-      message.content.push(part.text);
+      const hasThought = part.thought && part.thought.trim() !== '';
+
+      // 1. 如果当前 part 有 thought，并且我们尚未开启 <think> 标签
+      if (hasThought && !isThinking) {
+        message.content.push('<think>');
+        isThinking = true; // 标记已进入思考状态
+      }
+      // 2. 如果当前 part 没有 thought，但我们之前开启了 <think> 标签
+      else if (!hasThought && isThinking) {
+        message.content.push('</think>');
+        isThinking = false; // 标记已退出思考状态
+      }
+
+      // 将 part.text 推入数组（如果存在）
+      if (part.text) {
+        message.content.push(part.text);
+      }
     }
   }
+
+  // 3. 循环结束后，如果 <think> 标签仍然是开启状态，则在此闭合
+  if (isThinking) {
+    message.content.push('</think>');
+  }
+
   message.content = message.content.join(SEP) || null;
   return {
-    index: cand.index || 0, // 0-index is absent in new -002 models response
+    index: cand.index || 0,
     [key]: message,
     logprobs: null,
     finish_reason: message.tool_calls ? "tool_calls" : reasonsMap[cand.finishReason] || cand.finishReason,
-    //original_finish_reason: cand.finishReason,
   };
 };
+
 const transformCandidatesMessage = transformCandidates.bind(null, "message");
 const transformCandidatesDelta = transformCandidates.bind(null, "delta");
 
