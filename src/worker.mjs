@@ -517,6 +517,8 @@ const reasonsMap = { //https://ai.google.dev/api/rest/v1/GenerateContentResponse
 const SEP = "\n\n|>";
 const transformCandidates = (key, cand) => {
   const message = { role: "assistant", content: [] };
+  let answer = "";
+  let reasoning_content = "";
   for (const part of cand.content?.parts ?? []) {
     if (part.functionCall) {
       const fc = part.functionCall;
@@ -529,11 +531,18 @@ const transformCandidates = (key, cand) => {
           arguments: JSON.stringify(fc.args),
         }
       });
-    } else {
-      message.content.push(part.text);
+    }else if (part.thought) {
+      reasoning_content += part.text;
+    }else {
+      answer += part.text;
+      // message.content.push(part.text);
     }
   }
-  message.content = message.content.join(SEP) || null;
+  // message.content = message.content.join(SEP) || null;
+  message.content = answer;
+  if(reasoning_content != "") {
+    message.reasoning_content = reasoning_content;
+  }
   return {
     index: cand.index || 0, // 0-index is absent in new -002 models response
     [key]: message,
