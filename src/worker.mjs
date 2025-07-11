@@ -531,14 +531,17 @@ const transformCandidates = (key, cand) => {
           arguments: JSON.stringify(fc.args),
         }
       });
-    }else if (part.thought && part.thought != '' && !thinking) {
+    }else if (part.thought && !thinking) {
+      console.log("nowthink begin:"+true)
       message.content.push('<think>' + part.text );
       thinking = true;
     }else {
       if(thinking) {
+        console.log("nowthink end:"+true)
         message.content.push('</think>' + part.text );
         thinking = false;
       }else {
+        console.log("part.thought,thinking:"+part.thought+","+thinking)
         message.content.push(part.text);
       }
     }
