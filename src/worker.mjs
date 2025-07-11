@@ -519,6 +519,7 @@ let thinking = false;
 const transformCandidates = (key, cand) => {
   const message = { role: "assistant", content: [] };
   for (const part of cand.content?.parts ?? []) {
+    console.log('part.thought:'+part.thought);
     if (part.functionCall) {
       const fc = part.functionCall;
       message.tool_calls = message.tool_calls ?? [];
@@ -530,10 +531,8 @@ const transformCandidates = (key, cand) => {
           arguments: JSON.stringify(fc.args),
         }
       });
-    }else if (part.thought) {
-      if(!thinking) {
-        message.content.push('<think>' + part.text );
-      }
+    }else if (part.thought && part.thought != '' && !thinking) {
+      message.content.push('<think>' + part.text );
       thinking = true;
     }else {
       if(thinking) {
