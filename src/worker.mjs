@@ -515,6 +515,7 @@ const reasonsMap = { //https://ai.google.dev/api/rest/v1/GenerateContentResponse
   //"OTHER": "OTHER",
 };
 const SEP = "\n\n|>";
+let thinking = false;
 const transformCandidates = (key, cand) => {
   const message = { role: "assistant", content: [] };
   for (const part of cand.content?.parts ?? []) {
@@ -529,8 +530,18 @@ const transformCandidates = (key, cand) => {
           arguments: JSON.stringify(fc.args),
         }
       });
-    } else {
-      message.content.push(part.text);
+    }else if (part.thought) {
+      if(!thinking) {
+        message.content.push('<think>' + part.text );
+      }
+      thinking = true;
+    }else {
+      if(thinking) {
+        message.content.push('</think>' + part.text );
+        thinking = false;
+      }else {
+        message.content.push(part.text);
+      }
     }
   }
   message.content = message.content.join(SEP) || null;
