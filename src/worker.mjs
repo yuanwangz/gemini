@@ -340,7 +340,8 @@ const transformFnResponse = ({ content, tool_call_id }, parts) => {
     response = JSON.parse(content);
   } catch (err) {
     console.error("Error parsing function response content:", err);
-    throw new HttpError("Invalid function response: " + content, 400);
+    // throw new HttpError("Invalid function response: " + content, 400);
+    response = content;
   }
   if (typeof response !== "object" || response === null || Array.isArray(response)) {
     response = { result: response };
