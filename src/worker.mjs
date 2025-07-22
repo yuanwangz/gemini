@@ -341,6 +341,7 @@ const transformFnResponse = ({ content, tool_call_id }, parts) => {
   } catch (err) {
     console.error("Error parsing function response content:", err);
     // throw new HttpError("Invalid function response: " + content, 400);
+    console.log(content);
     response = content;
   }
   if (typeof response !== "object" || response === null || Array.isArray(response)) {
