@@ -322,7 +322,6 @@ const parseImg = async (url) => {
       throw new HttpError("Invalid image data: " + url, 400);
     }
     ({ mimeType, data } = match.groups);
-    console.log("mimeType:" +mimeType)
   }
   return {
     inlineData: {
@@ -408,6 +407,7 @@ const transformMsg = async ({ content }) => {
   for (const item of content) {
     switch (item.type) {
       case "text":
+        console.log("text:"+item.text)
         parts.push({ text: item.text });
         break;
       case "image_url":
