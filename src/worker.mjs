@@ -424,7 +424,6 @@ const transformMsg = async ({ content }) => {
         throw new HttpError(`Unknown "content" item type: "${item.type}"`, 400);
     }
   }
-  console.log(parts);
   if (content.every(item => item.type === "image_url")) {
     parts.push({ text: "" }); // to avoid "Unable to submit request because it must have a text parameter"
   }
