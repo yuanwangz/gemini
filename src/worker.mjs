@@ -322,6 +322,7 @@ const parseImg = async (url) => {
       throw new HttpError("Invalid image data: " + url, 400);
     }
     ({ mimeType, data } = match.groups);
+    console.log("mimeType:" +mimeType)
   }
   return {
     inlineData: {
