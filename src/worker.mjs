@@ -407,7 +407,6 @@ const transformMsg = async ({ content }) => {
   for (const item of content) {
     switch (item.type) {
       case "text":
-        console.log("text:"+item.text)
         parts.push({ text: item.text });
         break;
       case "image_url":
@@ -425,6 +424,7 @@ const transformMsg = async ({ content }) => {
         throw new HttpError(`Unknown "content" item type: "${item.type}"`, 400);
     }
   }
+  console.log(parts);
   if (content.every(item => item.type === "image_url")) {
     parts.push({ text: "" }); // to avoid "Unable to submit request because it must have a text parameter"
   }
