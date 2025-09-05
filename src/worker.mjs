@@ -580,12 +580,14 @@ const transformCandidates = (key, cand) => {
     }else if (part.thought) {
       reasoning_content += part.text;
     }else if (part.inlineData) {
-      const imageUrl = await uploadImageToHost(part.inlineData.data, '123456');
-      if (imageUrl) {
-        answer += `![图片](${imageUrl})`;
-      } else {
-        answer += '[图片上传失败]';
-      }
+      (async () => {
+        const imageUrl = await uploadImageToHost(part.inlineData.data, '123456');
+        if (imageUrl) {
+          answer += `![图片](${imageUrl})`;
+        } else {
+          answer += '[图片上传失败]';
+        }
+      })();
     }else {
       answer += part.text;
       // message.content.push(part.text);
