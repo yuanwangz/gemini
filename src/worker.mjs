@@ -581,6 +581,7 @@ const transformCandidates = async (key, cand) => {
     }else if (part.thought) {
       reasoning_content += part.text;
     }else if (part.inlineData) {
+      // 等待图片上传完成
       const imageUrl = await uploadImageToHost(part.inlineData.data, '123456');
       console.log(imageUrl);
       if (imageUrl) {
@@ -590,24 +591,22 @@ const transformCandidates = async (key, cand) => {
       }
     }else {
       answer += part.text;
-      // message.content.push(part.text);
     }
   }
-  // message.content = message.content.join(SEP) || null;
+  
   message.content = answer;
   if(reasoning_content != "") {
     message.reasoning_content = reasoning_content;
   }
   return {
-    index: cand.index || 0, // 0-index is absent in new -002 models response
+    index: cand.index || 0,
     [key]: message,
     logprobs: null,
     finish_reason: message.tool_calls ? "tool_calls" : reasonsMap[cand.finishReason] || cand.finishReason,
-    //original_finish_reason: cand.finishReason,
   };
 };
-const transformCandidatesMessage = async (cand) => await transformCandidates("message", cand);
-const transformCandidatesDelta = async (cand) => await transformCandidates("delta", cand);
+const transformCandidatesMessage = (cand) => transformCandidates("message", cand);
+const transformCandidatesDelta = (cand) => transformCandidates("delta", cand);
 
 const transformUsage = (data) => ({
   completion_tokens: data.candidatesTokenCount,
@@ -673,7 +672,7 @@ const sseline = (obj) => {
   obj.created = Math.floor(Date.now()/1000);
   return "data: " + JSON.stringify(obj) + delimiter;
 };
-function toOpenAiStream (line, controller) {
+async function toOpenAiStream (line, controller) {
   let data;
   try {
     data = JSON.parse(line);
@@ -688,7 +687,7 @@ function toOpenAiStream (line, controller) {
   }
   const obj = {
     id: this.id,
-    choices: data.candidates.map(transformCandidatesDelta),
+    choices: await Promise.all(data.candidates.map(transformCandidatesDelta)),
     //created: Math.floor(Date.now()/1000),
     model: data.modelVersion ?? this.model,
     //system_fingerprint: "fp_69829325d0",
