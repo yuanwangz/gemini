@@ -540,7 +540,7 @@ async function uploadImageToHost(base64Data, authToken) {
         'Auth-Token': authToken
       }
     });
-    
+    console.log(response);
     if (!response.ok) {
       throw new Error(`图床上传失败: ${response.status} ${response.statusText}`);
     }
