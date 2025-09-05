@@ -540,13 +540,13 @@ async function uploadImageToHost(base64Data, authToken) {
         'Auth-Token': authToken
       }
     });
-    console.log(response);
+    
     if (!response.ok) {
       throw new Error(`图床上传失败: ${response.status} ${response.statusText}`);
     }
     
     const result = await response.json();
-    
+    console.log(result);
     // 检查上传是否成功
     if (result.ok && result.src) {
       // 拼接完整的 URL
@@ -582,6 +582,7 @@ const transformCandidates = (key, cand) => {
     }else if (part.inlineData) {
       (async () => {
         const imageUrl = await uploadImageToHost(part.inlineData.data, '123456');
+        console.log(imageUrl);
         if (imageUrl) {
           answer += `![图片](${imageUrl})`;
         } else {
