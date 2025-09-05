@@ -546,7 +546,7 @@ async function uploadImageToHost(base64Data, authToken) {
     }
     
     const result = await response.json();
-    console.log(result);
+    // console.log(result);
     // 检查上传是否成功
     if (result.ok && result.src) {
       // 拼接完整的 URL
@@ -583,11 +583,11 @@ const transformCandidates = async (key, cand) => {
     }else if (part.inlineData) {
       // 等待图片上传完成
       const imageUrl = await uploadImageToHost(part.inlineData.data, '123456');
-      console.log(imageUrl);
+      // console.log(imageUrl);
       if (imageUrl) {
-        answer += `![图片](${imageUrl})`;
+        answer += `\n![图片](${imageUrl})`;
       } else {
-        answer += '[图片上传失败]';
+        answer += '\n[图片上传失败]';
       }
     }else {
       answer += part.text;
