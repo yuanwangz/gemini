@@ -215,7 +215,7 @@ async function handleCompletions (req, apiKey) {
         console.error("Error parsing response:", err);
         return new Response(body, fixCors(response)); // output as is
       }
-      body = processCompletionsResponse(body, model, id);
+      body = await processCompletionsResponse(body, model, id);
     }
   }
   return new Response(body, fixCors(response));
@@ -561,10 +561,11 @@ async function uploadImageToHost(base64Data, authToken) {
   }
 }
 const SEP = "\n\n|>";
-const transformCandidates = (key, cand) => {
+const transformCandidates = async (key, cand) => {
   const message = { role: "assistant", content: [] };
   let answer = "";
   let reasoning_content = "";
+  
   for (const part of cand.content?.parts ?? []) {
     if (part.functionCall) {
       const fc = part.functionCall;
@@ -580,15 +581,13 @@ const transformCandidates = (key, cand) => {
     }else if (part.thought) {
       reasoning_content += part.text;
     }else if (part.inlineData) {
-      (async () => {
-        const imageUrl = await uploadImageToHost(part.inlineData.data, '123456');
-        console.log(imageUrl);
-        if (imageUrl) {
-          answer += `![图片](${imageUrl})`;
-        } else {
-          answer += '[图片上传失败]';
-        }
-      })();
+      const imageUrl = await uploadImageToHost(part.inlineData.data, '123456');
+      console.log(imageUrl);
+      if (imageUrl) {
+        answer += `![图片](${imageUrl})`;
+      } else {
+        answer += '[图片上传失败]';
+      }
     }else {
       answer += part.text;
       // message.content.push(part.text);
@@ -607,8 +606,8 @@ const transformCandidates = (key, cand) => {
     //original_finish_reason: cand.finishReason,
   };
 };
-const transformCandidatesMessage = transformCandidates.bind(null, "message");
-const transformCandidatesDelta = transformCandidates.bind(null, "delta");
+const transformCandidatesMessage = async (cand) => await transformCandidates("message", cand);
+const transformCandidatesDelta = async (cand) => await transformCandidates("delta", cand);
 
 const transformUsage = (data) => ({
   completion_tokens: data.candidatesTokenCount,
@@ -635,10 +634,10 @@ const checkPromptBlock = (choices, promptFeedback, key) => {
   return true;
 };
 
-const processCompletionsResponse = (data, model, id) => {
+const processCompletionsResponse = async (data, model, id) => {
   const obj = {
     id,
-    choices: data.candidates.map(transformCandidatesMessage),
+    choices: await Promise.all(data.candidates.map(transformCandidatesMessage)),
     created: Math.floor(Date.now()/1000),
     model: data.modelVersion ?? model,
     //system_fingerprint: "fp_69829325d0",
