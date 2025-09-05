@@ -516,6 +516,50 @@ const reasonsMap = { //https://ai.google.dev/api/rest/v1/GenerateContentResponse
   "RECITATION": "content_filter",
   //"OTHER": "OTHER",
 };
+async function uploadImageToHost(base64Data, authToken) {
+  try {
+    // 将 base64 转换为 Uint8Array
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    // 创建 Blob
+    const blob = new Blob([bytes], { type: 'image/png' });
+    
+    // 创建 FormData
+    const formData = new FormData();
+    formData.append('image', blob, 'image.png');
+    
+    // 发送请求到图床
+    const response = await fetch('https://i.111666.best/image', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Auth-Token': authToken
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`图床上传失败: ${response.status} ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    
+    // 检查上传是否成功
+    if (result.ok && result.src) {
+      // 拼接完整的 URL
+      const fullImageUrl = `https://i.111666.best${result.src}`;
+      return fullImageUrl;
+    } else {
+      throw new Error('图床返回失败状态');
+    }
+  } catch (error) {
+    console.error('上传图片到图床失败:', error);
+    return null;
+  }
+}
 const SEP = "\n\n|>";
 const transformCandidates = (key, cand) => {
   const message = { role: "assistant", content: [] };
@@ -535,6 +579,13 @@ const transformCandidates = (key, cand) => {
       });
     }else if (part.thought) {
       reasoning_content += part.text;
+    }else if (part.inlineData) {
+      const imageUrl = await uploadImageToHost(part.inlineData.data, '123456');
+      if (imageUrl) {
+        answer += `![图片](${imageUrl})`;
+      } else {
+        answer += '[图片上传失败]';
+      }
     }else {
       answer += part.text;
       // message.content.push(part.text);
