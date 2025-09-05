@@ -653,8 +653,8 @@ const responseLineRE = /^data: (.*)(?:\n\n|\r\r|\r\n\r\n)/;
 function parseStream (chunk, controller) {
   this.buffer += chunk;
   do {
-    const match = this.buffer.match(responseLineRE);
-    if (!match) { break; }
+    // const match = this.buffer.match(responseLineRE);
+    // if (!match) { break; }
     controller.enqueue(match[1]);
     this.buffer = this.buffer.substring(match[0].length);
   } while (true); // eslint-disable-line no-constant-condition
