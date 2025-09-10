@@ -34,7 +34,7 @@ export default {
         case pathname.endsWith("/images/generations"):
         case pathname.endsWith("/images/edits"):
           assert(request.method === "POST");
-          return handleImages(await request.json(), apiKey, pathname)
+          return handleImages(request, apiKey, pathname)
             .catch(errHandler);
         default:
           throw new HttpError("404 Not Found", 404);
@@ -144,10 +144,41 @@ async function handleEmbeddings (req, apiKey) {
   return new Response(body, fixCors(response));
 }
 
-const DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image-preview";
-async function handleImages (req, apiKey, pathname) {
+const DEFAULT_IMAGE_MODEL = "gemini-2.5-image-preview";
+async function handleImages (request, apiKey, pathname) {
   const isEdit = pathname.endsWith("/images/edits");
-  console.log("图片生成......")
+  let req;
+  
+  try {
+    // 检查 Content-Type 来决定如何解析请求体
+    const contentType = request.headers.get("Content-Type") || "";
+    
+    if (contentType.includes("multipart/form-data")) {
+      // 处理表单数据（通常用于图片编辑）
+      const formData = await request.formData();
+      req = {};
+      
+      // 提取表单字段
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          // 处理文件上传
+          const arrayBuffer = await value.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString('base64');
+          const mimeType = value.type || 'image/png';
+          req[key] = `data:${mimeType};base64,${base64}`;
+        } else {
+          req[key] = value;
+        }
+      }
+    } else {
+      // 处理 JSON 数据（通常用于图片生成）
+      req = await request.json();
+    }
+  } catch (err) {
+    console.error("Error parsing request:", err);
+    throw new HttpError("Invalid request format", 400);
+  }
+  
   // 验证必需参数
   if (!req.prompt) {
     throw new HttpError("prompt is required", 400);
@@ -164,7 +195,6 @@ async function handleImages (req, apiKey, pathname) {
   });
 
   let { body } = response;
-  console.log(response);
   if (response.ok) {
     body = await response.text();
     try {
