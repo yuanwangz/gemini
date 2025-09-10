@@ -144,7 +144,7 @@ async function handleEmbeddings (req, apiKey) {
   return new Response(body, fixCors(response));
 }
 
-const DEFAULT_IMAGE_MODEL = "gemini-2.5-image-preview";
+const DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image-preview";
 async function handleImages (request, apiKey, pathname) {
   const isEdit = pathname.endsWith("/images/edits");
   let req;
