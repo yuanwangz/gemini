@@ -164,6 +164,7 @@ async function handleImages (req, apiKey, pathname) {
   });
 
   let { body } = response;
+  console.log(response);
   if (response.ok) {
     body = await response.text();
     try {
