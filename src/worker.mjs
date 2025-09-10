@@ -147,7 +147,7 @@ async function handleEmbeddings (req, apiKey) {
 const DEFAULT_IMAGE_MODEL = "gemini-2.5-image-preview";
 async function handleImages (req, apiKey, pathname) {
   const isEdit = pathname.endsWith("/images/edits");
-  
+  console.log("图片生成......")
   // 验证必需参数
   if (!req.prompt) {
     throw new HttpError("prompt is required", 400);
