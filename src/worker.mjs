@@ -31,6 +31,11 @@ export default {
           assert(request.method === "GET");
           return handleModels(apiKey)
             .catch(errHandler);
+        case pathname.endsWith("/images/generations"):
+        case pathname.endsWith("/images/edits"):
+          assert(request.method === "POST");
+          return handleImages(await request.json(), apiKey, pathname)
+            .catch(errHandler);
         default:
           throw new HttpError("404 Not Found", 404);
       }
@@ -136,6 +141,44 @@ async function handleEmbeddings (req, apiKey) {
       model: req.model,
     }, null, "  ");
   }
+  return new Response(body, fixCors(response));
+}
+
+const DEFAULT_IMAGE_MODEL = "gemini-2.5-image-preview";
+async function handleImages (req, apiKey, pathname) {
+  const isEdit = pathname.endsWith("/images/edits");
+  
+  // 验证必需参数
+  if (!req.prompt) {
+    throw new HttpError("prompt is required", 400);
+  }
+  
+  // 转换为 Gemini 聊天请求
+  const chatRequest = await transformImageRequest(req, isEdit);
+  
+  // 调用 Gemini API
+  const response = await fetch(`${BASE_URL}/${API_VERSION}/models/${DEFAULT_IMAGE_MODEL}:generateContent`, {
+    method: "POST",
+    headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
+    body: JSON.stringify(chatRequest),
+  });
+
+  let { body } = response;
+  if (response.ok) {
+    body = await response.text();
+    try {
+      const geminiResponse = JSON.parse(body);
+      if (!geminiResponse.candidates) {
+        throw new Error("Invalid completion object");
+      }
+      // 处理响应并提取图片
+      body = await processImageResponse(geminiResponse, req);
+    } catch (err) {
+      console.error("Error parsing image response:", err);
+      return new Response(body, fixCors(response));
+    }
+  }
+  
   return new Response(body, fixCors(response));
 }
 
@@ -495,6 +538,76 @@ const transformTools = (req) => {
   return { tools, tool_config };
 };
 
+const transformImageRequest = async (req, isEdit) => {
+  let prompt = req.prompt;
+  const parts = [];
+  
+  if (isEdit) {
+    // 图片编辑请求
+    if (!req.image) {
+      throw new HttpError("image is required for editing", 400);
+    }
+    
+    // 添加原图片
+    parts.push(await parseImg(req.image));
+    
+    // 如果有 mask，也添加 mask
+    if (req.mask) {
+      parts.push(await parseImg(req.mask));
+      prompt = `Edit the image based on this mask and the following instructions: ${prompt}. Please generate the edited image.`;
+    } else {
+      prompt = `Edit this image according to the following instructions: ${prompt}. Please generate the edited image.`;
+    }
+  } else {
+    // 图片生成请求
+    prompt = `Generate an image based on the following description: ${prompt}`;
+  }
+  
+  // 处理尺寸要求
+  if (req.size) {
+    const sizePrompts = {
+      "256x256": "256x256 pixels, square format",
+      "512x512": "512x512 pixels, square format", 
+      "1024x1024": "1024x1024 pixels, square format",
+      "1792x1024": "1792x1024 pixels, landscape format",
+      "1024x1792": "1024x1792 pixels, portrait format"
+    };
+    if (sizePrompts[req.size]) {
+      prompt += ` The image should be ${sizePrompts[req.size]}.`;
+    }
+  }
+  
+  // 处理风格和质量要求
+  if (req.style) {
+    prompt += ` Style: ${req.style}.`;
+  }
+  
+  if (req.quality) {
+    prompt += ` Quality: ${req.quality}.`;
+  }
+  
+  // 添加文本提示
+  parts.push({ text: prompt });
+  
+  const contents = [{
+    role: "user",
+    parts
+  }];
+  
+  // 设置生成配置
+  const generationConfig = {};
+  
+  if (req.n && req.n > 1) {
+    generationConfig.candidateCount = Math.min(req.n, 4); // Gemini 最多支持 4 个候选
+  }
+  
+  return {
+    contents,
+    safetySettings,
+    generationConfig
+  };
+};
+
 const transformRequest = async (req) => ({
   ...await transformMessages(req.messages),
   safetySettings,
@@ -631,6 +744,52 @@ const checkPromptBlock = (choices, promptFeedback, key) => {
     });
   }
   return true;
+};
+
+const processImageResponse = async (data, originalReq) => {
+  const images = [];
+  
+  // 处理所有候选响应
+  for (const candidate of data.candidates || []) {
+    for (const part of candidate.content?.parts || []) {
+      if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+        // 上传图片到图床
+        const imageUrl = await uploadImageToHost(part.inlineData.data, '123456');
+        if (imageUrl) {
+          const imageData = {
+            url: imageUrl
+          };
+          
+          // 如果请求要求返回 base64 格式
+          if (originalReq.response_format === 'b64_json') {
+            imageData.b64_json = part.inlineData.data;
+            delete imageData.url;
+          }
+          
+          // 添加修订提示（如果是编辑请求）
+          if (originalReq.prompt) {
+            imageData.revised_prompt = originalReq.prompt;
+          }
+          
+          images.push(imageData);
+        }
+      }
+    }
+  }
+  
+  // 如果没有找到图片，返回错误
+  if (images.length === 0) {
+    console.warn("No images found in Gemini response");
+    throw new HttpError("Failed to generate image", 500);
+  }
+  
+  // 构造 OpenAI 格式的响应
+  const response = {
+    created: Math.floor(Date.now() / 1000),
+    data: images
+  };
+  
+  return JSON.stringify(response, null, 2);
 };
 
 const processCompletionsResponse = async (data, model, id) => {
