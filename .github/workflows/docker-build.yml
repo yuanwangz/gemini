@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Build and Push Docker Image (Simple)
 
 on:
   push:
@@ -59,10 +59,9 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Generate artifact attestation
+    - name: Output image details
       if: github.event_name != 'pull_request'
-      uses: actions/attest-build-provenance@v1
-      with:
-        subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
-        subject-digest: ${{ steps.build.outputs.digest }}
-        push-to-registry: true
+      run: |
+        echo "Image pushed successfully!"
+        echo "Tags: ${{ steps.meta.outputs.tags }}"
+        echo "Labels: ${{ steps.meta.outputs.labels }}"
