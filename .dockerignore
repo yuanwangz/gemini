@@ -1,0 +1,70 @@
+# 忽略 node_modules
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 忽略版本控制
+.git
+.gitignore
+.gitattributes
+
+# 忽略開發工具配置
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 忽略測試文件
+test
+tests
+*.test.js
+*.spec.js
+coverage
+
+# 忽略文檔
+README.md
+*.md
+docs
+
+# 忽略環境文件
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 忽略日誌文件
+logs
+*.log
+
+# 忽略臨時文件
+.tmp
+.temp
+*.tmp
+*.temp
+
+# 忽略 Docker 相關文件
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# 忽略 CI/CD 文件
+.github
+.gitlab-ci.yml
+.travis.yml
+.circleci
+
+# 忽略平台特定文件
+.DS_Store
+Thumbs.db
+
+# 忽略構建輸出
+dist
+build
+out
+
+# 忽略包管理器鎖文件（保留 package-lock.json 用於生產環境）
+yarn.lock
+pnpm-lock.yaml
