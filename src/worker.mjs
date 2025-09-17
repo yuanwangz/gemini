@@ -246,7 +246,7 @@ async function handleCompletions (req, apiKey) {
       // eslint-disable-next-line no-fallthrough
     case req.model.endsWith("-search-preview"):
       body.tools = body.tools || [];
-      body.tools.push({googleSearch: {}});
+      body.tools.push({googleSearch: {}},{urlContext: {}});
   }
   const TASK = req.stream ? "streamGenerateContent" : "generateContent";
   let url = `${BASE_URL}/${API_VERSION}/models/${model}:${TASK}`;
