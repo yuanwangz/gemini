@@ -71,7 +71,7 @@ const handleOPTIONS = async () => {
 
 const BASE_URL = "https://generativelanguage.googleapis.com";
 const API_VERSION = "v1beta";
-const GEMINI_RETRY_COUNT = 3;
+const GEMINI_RETRY_COUNT = 5;
 const GEMINI_RETRY_STATUS = 503;
 const GEMINI_RETRY_BASE_DELAY_MS = 500;
 const GEMINI_RETRY_MAX_DELAY_MS = 5000;
