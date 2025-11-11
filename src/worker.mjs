@@ -71,6 +71,51 @@ const handleOPTIONS = async () => {
 
 const BASE_URL = "https://generativelanguage.googleapis.com";
 const API_VERSION = "v1beta";
+const GEMINI_RETRY_COUNT = 3;
+const GEMINI_RETRY_STATUS = 503;
+const GEMINI_RETRY_BASE_DELAY_MS = 500;
+const GEMINI_RETRY_MAX_DELAY_MS = 5000;
+
+const sleep = (ms) => ms > 0
+  ? new Promise(resolve => setTimeout(resolve, ms))
+  : Promise.resolve();
+
+const clampDelay = (ms) => Math.min(Math.max(ms ?? 0, 0), GEMINI_RETRY_MAX_DELAY_MS);
+const parseRetryAfter = (value) => {
+  if (!value) { return; }
+  const seconds = Number(value);
+  if (!Number.isNaN(seconds)) {
+    return seconds * 1000;
+  }
+  const date = Date.parse(value);
+  if (!Number.isNaN(date)) {
+    return date - Date.now();
+  }
+};
+const getRetryDelay = (retryAfter, attempt) => {
+  const parsed = parseRetryAfter(retryAfter);
+  if (parsed !== undefined) {
+    return clampDelay(parsed);
+  }
+  return clampDelay(GEMINI_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1)));
+};
+
+const fetchGeminiWithRetry = async (url, init, retries = GEMINI_RETRY_COUNT) => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, init);
+      if (response.status !== GEMINI_RETRY_STATUS || attempt === retries) {
+        return response;
+      }
+      await sleep(getRetryDelay(response.headers.get("retry-after"), attempt + 1));
+    } catch (err) {
+      if (attempt === retries) {
+        throw err;
+      }
+      await sleep(getRetryDelay(undefined, attempt + 1));
+    }
+  }
+};
 
 // https://github.com/google-gemini/generative-ai-js/blob/cf223ff4a1ee5a2d944c53cddb8976136382bee6/src/requests/request.ts#L71
 const API_CLIENT = "genai-js/0.21.0"; // npm view @google/generative-ai version
@@ -81,7 +126,7 @@ const makeHeaders = (apiKey, more) => ({
 });
 
 async function handleModels (apiKey) {
-  const response = await fetch(`${BASE_URL}/${API_VERSION}/models`, {
+  const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/models`, {
     headers: makeHeaders(apiKey),
   });
   let { body } = response;
@@ -117,7 +162,7 @@ async function handleEmbeddings (req, apiKey) {
   if (!Array.isArray(req.input)) {
     req.input = [ req.input ];
   }
-  const response = await fetch(`${BASE_URL}/${API_VERSION}/${model}:batchEmbedContents`, {
+  const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/${model}:batchEmbedContents`, {
     method: "POST",
     headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
     body: JSON.stringify({
@@ -188,7 +233,7 @@ async function handleImages (request, apiKey, pathname) {
   const chatRequest = await transformImageRequest(req, isEdit);
   
   // 调用 Gemini API
-  const response = await fetch(`${BASE_URL}/${API_VERSION}/models/${DEFAULT_IMAGE_MODEL}:generateContent`, {
+  const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/models/${DEFAULT_IMAGE_MODEL}:generateContent`, {
     method: "POST",
     headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
     body: JSON.stringify(chatRequest),
@@ -251,7 +296,7 @@ async function handleCompletions (req, apiKey) {
   const TASK = req.stream ? "streamGenerateContent" : "generateContent";
   let url = `${BASE_URL}/${API_VERSION}/models/${model}:${TASK}`;
   if (req.stream) { url += "?alt=sse"; }
-  const response = await fetch(url, {
+  const response = await fetchGeminiWithRetry(url, {
     method: "POST",
     headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
     body: JSON.stringify(body),
