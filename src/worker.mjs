@@ -75,6 +75,7 @@ const GEMINI_RETRY_COUNT = 3;
 const GEMINI_RETRY_STATUS = 503;
 const GEMINI_RETRY_BASE_DELAY_MS = 500;
 const GEMINI_RETRY_MAX_DELAY_MS = 5000;
+const describeRequest = (url, init) => `${(init?.method ?? "GET").toUpperCase()} ${url}`;
 
 const sleep = (ms) => ms > 0
   ? new Promise(resolve => setTimeout(resolve, ms))
@@ -101,18 +102,29 @@ const getRetryDelay = (retryAfter, attempt) => {
 };
 
 const fetchGeminiWithRetry = async (url, init, retries = GEMINI_RETRY_COUNT) => {
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  const totalAttempts = retries + 1;
+  const requestLabel = describeRequest(url, init);
+  for (let attempt = 0; attempt < totalAttempts; attempt++) {
     try {
       const response = await fetch(url, init);
-      if (response.status !== GEMINI_RETRY_STATUS || attempt === retries) {
-        return response;
+      if (response.status === GEMINI_RETRY_STATUS && attempt < retries) {
+        const delay = getRetryDelay(response.headers.get("retry-after"), attempt + 1);
+        console.warn(`[Gemini] 503 ${response.statusText || ""} for ${requestLabel} (attempt ${attempt + 1}/${totalAttempts}), retrying in ${delay}ms`);
+        await sleep(delay);
+        continue;
       }
-      await sleep(getRetryDelay(response.headers.get("retry-after"), attempt + 1));
+      if (!response.ok) {
+        console.error(`[Gemini] Request failed ${response.status} ${response.statusText || ""} for ${requestLabel}`);
+      }
+      return response;
     } catch (err) {
       if (attempt === retries) {
+        console.error(`[Gemini] Request error for ${requestLabel} after ${totalAttempts} attempts:`, err);
         throw err;
       }
-      await sleep(getRetryDelay(undefined, attempt + 1));
+      const delay = getRetryDelay(undefined, attempt + 1);
+      console.warn(`[Gemini] Request error for ${requestLabel} (attempt ${attempt + 1}/${totalAttempts}): ${err?.message ?? err}, retrying in ${delay}ms`);
+      await sleep(delay);
     }
   }
 };
