@@ -497,9 +497,18 @@ const transformFnResponse = ({ content, tool_call_id }, parts) => {
   };
 };
 
+const getThoughtSignature = (source = {}) =>
+  source.extra_content?.google?.thought_signature
+  ?? source.extra_content?.google?.thoughtSignature
+  ?? source.extraContent?.google?.thought_signature
+  ?? source.extraContent?.google?.thoughtSignature
+  ?? source.thought_signature
+  ?? source.thoughtSignature;
+
 const transformFnCalls = ({ tool_calls }) => {
   const calls = {};
-  const parts = tool_calls.map(({ function: { arguments: argstr, name }, id, type }, i) => {
+  const parts = tool_calls.map((toolCall, i) => {
+    const { function: { arguments: argstr, name }, id, type } = toolCall;
     if (type !== "function") {
       throw new HttpError(`Unsupported tool_call type: "${type}"`, 400);
     }
@@ -511,13 +520,18 @@ const transformFnCalls = ({ tool_calls }) => {
       throw new HttpError("Invalid function arguments: " + argstr, 400);
     }
     calls[id] = {i, name};
-    return {
+    const part = {
       functionCall: {
         id: id.startsWith("call_") ? null : id,
         name,
         args,
       }
     };
+    const thoughtSignature = getThoughtSignature(toolCall);
+    if (thoughtSignature) {
+      part.thoughtSignature = thoughtSignature;
+    }
+    return part;
   });
   parts.calls = calls;
   return parts;
@@ -770,6 +784,7 @@ const transformCandidates = async (key, cand) => {
   for (const part of cand.content?.parts ?? []) {
     if (part.functionCall) {
       const fc = part.functionCall;
+      const thoughtSignature = part.thoughtSignature ?? part.thought_signature;
       message.tool_calls = message.tool_calls ?? [];
       message.tool_calls.push({
         id: fc.id ?? "call_" + generateId(),
@@ -777,7 +792,14 @@ const transformCandidates = async (key, cand) => {
         function: {
           name: fc.name,
           arguments: JSON.stringify(fc.args),
-        }
+        },
+        ...(thoughtSignature && {
+          extra_content: {
+            google: {
+              thought_signature: thoughtSignature
+            }
+          }
+        })
       });
     }else if (part.thought) {
       reasoning_content += part.text;
