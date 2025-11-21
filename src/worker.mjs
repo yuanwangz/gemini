@@ -428,8 +428,14 @@ const transformConfig = (req) => {
         throw new HttpError("Unsupported response_format.type", 400);
     }
   }
+
+  // 默认启用思考总结,确保思考内容被正确标记
+  // 对于不支持思考的老模型,这个配置会被忽略
+  cfg.thinkingConfig = cfg.thinkingConfig || {};
+  cfg.thinkingConfig.includeThoughts = true;
+
   if (req.reasoning_effort) {
-    cfg.thinkingConfig = { thinkingBudget: thinkingBudgetMap[req.reasoning_effort] };
+    cfg.thinkingConfig.thinkingBudget = thinkingBudgetMap[req.reasoning_effort];
   }
   return cfg;
 };
