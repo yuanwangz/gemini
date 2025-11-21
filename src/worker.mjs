@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 
 export default {
-  async fetch (request) {
+  async fetch(request) {
     if (request.method === "OPTIONS") {
       return handleOPTIONS();
     }
@@ -137,7 +137,7 @@ const makeHeaders = (apiKey, more) => ({
   ...more
 });
 
-async function handleModels (apiKey) {
+async function handleModels(apiKey) {
   const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/models`, {
     headers: makeHeaders(apiKey),
   });
@@ -158,7 +158,7 @@ async function handleModels (apiKey) {
 }
 
 const DEFAULT_EMBEDDINGS_MODEL = "text-embedding-004";
-async function handleEmbeddings (req, apiKey) {
+async function handleEmbeddings(req, apiKey) {
   if (typeof req.model !== "string") {
     throw new HttpError("model is not specified", 400);
   }
@@ -172,7 +172,7 @@ async function handleEmbeddings (req, apiKey) {
     model = "models/" + req.model;
   }
   if (!Array.isArray(req.input)) {
-    req.input = [ req.input ];
+    req.input = [req.input];
   }
   const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/${model}:batchEmbedContents`, {
     method: "POST",
@@ -201,20 +201,20 @@ async function handleEmbeddings (req, apiKey) {
   return new Response(body, fixCors(response));
 }
 
-const DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image-preview";
-async function handleImages (request, apiKey, pathname) {
+const DEFAULT_IMAGE_MODEL = "gemini-3-pro-image-preview";
+async function handleImages(request, apiKey, pathname) {
   const isEdit = pathname.endsWith("/images/edits");
   let req;
-  
+
   try {
     // 检查 Content-Type 来决定如何解析请求体
     const contentType = request.headers.get("Content-Type") || "";
-    
+
     if (contentType.includes("multipart/form-data")) {
       // 处理表单数据（通常用于图片编辑）
       const formData = await request.formData();
       req = {};
-      
+
       // 提取表单字段
       for (const [key, value] of formData.entries()) {
         if (value instanceof File) {
@@ -235,15 +235,15 @@ async function handleImages (request, apiKey, pathname) {
     console.error("Error parsing request:", err);
     throw new HttpError("Invalid request format", 400);
   }
-  
+
   // 验证必需参数
   if (!req.prompt) {
     throw new HttpError("prompt is required", 400);
   }
-  
+
   // 转换为 Gemini 聊天请求
   const chatRequest = await transformImageRequest(req, isEdit);
-  
+
   // 调用 Gemini API
   const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/models/${DEFAULT_IMAGE_MODEL}:generateContent`, {
     method: "POST",
@@ -266,12 +266,12 @@ async function handleImages (request, apiKey, pathname) {
       return new Response(body, fixCors(response));
     }
   }
-  
+
   return new Response(body, fixCors(response));
 }
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
-async function handleCompletions (req, apiKey) {
+async function handleCompletions(req, apiKey) {
   let model = DEFAULT_MODEL;
   switch (true) {
     case typeof req.model !== "string":
@@ -300,10 +300,10 @@ async function handleCompletions (req, apiKey) {
   switch (true) {
     case model.endsWith(":search"):
       model = model.substring(0, model.length - 7);
-      // eslint-disable-next-line no-fallthrough
+    // eslint-disable-next-line no-fallthrough
     case req.model.endsWith("-search-preview"):
       body.tools = body.tools || [];
-      body.tools.push({googleSearch: {}},{urlContext: {}});
+      body.tools.push({ googleSearch: {} }, { urlContext: {} });
   }
   const TASK = req.stream ? "streamGenerateContent" : "generateContent";
   let url = `${BASE_URL}/${API_VERSION}/models/${model}:${TASK}`;
@@ -417,7 +417,7 @@ const transformConfig = (req) => {
           cfg.responseMimeType = "text/x.enum";
           break;
         }
-        // eslint-disable-next-line no-fallthrough
+      // eslint-disable-next-line no-fallthrough
       case "json_object":
         cfg.responseMimeType = "application/json";
         break;
@@ -519,7 +519,7 @@ const transformFnCalls = ({ tool_calls }) => {
       console.error("Error parsing function arguments:", err);
       throw new HttpError("Invalid function arguments: " + argstr, 400);
     }
-    calls[id] = {i, name};
+    calls[id] = { i, name };
     const part = {
       functionCall: {
         id: id.startsWith("call_") ? null : id,
@@ -627,7 +627,7 @@ const transformTools = (req) => {
     tools = [{ function_declarations: funcs.map(schema => schema.function) }];
   }
   if (req.tool_choice) {
-    const allowed_function_names = req.tool_choice?.type === "function" ? [ req.tool_choice?.function?.name ] : undefined;
+    const allowed_function_names = req.tool_choice?.type === "function" ? [req.tool_choice?.function?.name] : undefined;
     if (allowed_function_names || typeof req.tool_choice === "string") {
       tool_config = {
         function_calling_config: {
@@ -643,16 +643,16 @@ const transformTools = (req) => {
 const transformImageRequest = async (req, isEdit) => {
   let prompt = req.prompt;
   const parts = [];
-  
+
   if (isEdit) {
     // 图片编辑请求
     if (!req.image) {
       throw new HttpError("image is required for editing", 400);
     }
-    
+
     // 添加原图片
     parts.push(await parseImg(req.image));
-    
+
     // 如果有 mask，也添加 mask
     if (req.mask) {
       parts.push(await parseImg(req.mask));
@@ -664,12 +664,12 @@ const transformImageRequest = async (req, isEdit) => {
     // 图片生成请求
     prompt = `Generate an image based on the following description: ${prompt}`;
   }
-  
+
   // 处理尺寸要求
   if (req.size) {
     const sizePrompts = {
       "256x256": "256x256 pixels, square format",
-      "512x512": "512x512 pixels, square format", 
+      "512x512": "512x512 pixels, square format",
       "1024x1024": "1024x1024 pixels, square format",
       "1792x1024": "1792x1024 pixels, landscape format",
       "1024x1792": "1024x1792 pixels, portrait format"
@@ -678,31 +678,31 @@ const transformImageRequest = async (req, isEdit) => {
       prompt += ` The image should be ${sizePrompts[req.size]}.`;
     }
   }
-  
+
   // 处理风格和质量要求
   if (req.style) {
     prompt += ` Style: ${req.style}.`;
   }
-  
+
   if (req.quality) {
     prompt += ` Quality: ${req.quality}.`;
   }
-  
+
   // 添加文本提示
   parts.push({ text: prompt });
-  
+
   const contents = [{
     role: "user",
     parts
   }];
-  
+
   // 设置生成配置
   const generationConfig = {};
-  
+
   if (req.n && req.n > 1) {
     generationConfig.candidateCount = Math.min(req.n, 4); // Gemini 最多支持 4 个候选
   }
-  
+
   return {
     contents,
     safetySettings,
@@ -739,14 +739,14 @@ async function uploadImageToHost(base64Data, authToken) {
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    
+
     // 创建 Blob
     const blob = new Blob([bytes], { type: 'image/png' });
-    
+
     // 创建 FormData
     const formData = new FormData();
     formData.append('image', blob, 'image.png');
-    
+
     // 发送请求到图床
     const response = await fetch('https://i.111666.best/image', {
       method: 'POST',
@@ -755,11 +755,11 @@ async function uploadImageToHost(base64Data, authToken) {
         'Auth-Token': authToken
       }
     });
-    
+
     if (!response.ok) {
       throw new Error(`图床上传失败: ${response.status} ${response.statusText}`);
     }
-    
+
     const result = await response.json();
     // console.log(result);
     // 检查上传是否成功
@@ -780,7 +780,7 @@ const transformCandidates = async (key, cand) => {
   const message = { role: "assistant", content: [] };
   let answer = "";
   let reasoning_content = "";
-  
+
   for (const part of cand.content?.parts ?? []) {
     if (part.functionCall) {
       const fc = part.functionCall;
@@ -801,9 +801,9 @@ const transformCandidates = async (key, cand) => {
           }
         })
       });
-    }else if (part.thought) {
+    } else if (part.thought) {
       reasoning_content += part.text;
-    }else if (part.inlineData) {
+    } else if (part.inlineData) {
       // 等待图片上传完成
       const imageUrl = await uploadImageToHost(part.inlineData.data, '123456');
       // console.log(imageUrl);
@@ -812,13 +812,13 @@ const transformCandidates = async (key, cand) => {
       } else {
         answer += '\n[图片上传失败]';
       }
-    }else {
+    } else {
       answer += part.text;
     }
   }
-  
+
   message.content = answer;
-  if(reasoning_content != "") {
+  if (reasoning_content != "") {
     message.reasoning_content = reasoning_content;
   }
   return {
@@ -858,7 +858,7 @@ const checkPromptBlock = (choices, promptFeedback, key) => {
 
 const processImageResponse = async (data, originalReq) => {
   const images = [];
-  
+
   // 处理所有候选响应
   for (const candidate of data.candidates || []) {
     for (const part of candidate.content?.parts || []) {
@@ -869,36 +869,36 @@ const processImageResponse = async (data, originalReq) => {
           const imageData = {
             url: imageUrl
           };
-          
+
           // 如果请求要求返回 base64 格式
           if (originalReq.response_format === 'b64_json') {
             imageData.b64_json = part.inlineData.data;
             delete imageData.url;
           }
-          
+
           // 添加修订提示（如果是编辑请求）
           if (originalReq.prompt) {
             imageData.revised_prompt = originalReq.prompt;
           }
-          
+
           images.push(imageData);
         }
       }
     }
   }
-  
+
   // 如果没有找到图片，返回错误
   if (images.length === 0) {
     console.warn("No images found in Gemini response");
     throw new HttpError("Failed to generate image", 500);
   }
-  
+
   // 构造 OpenAI 格式的响应
   const response = {
     created: Math.floor(Date.now() / 1000),
     data: images
   };
-  
+
   return JSON.stringify(response, null, 2);
 };
 
@@ -906,20 +906,20 @@ const processCompletionsResponse = async (data, model, id) => {
   const obj = {
     id,
     choices: await Promise.all(data.candidates.map(transformCandidatesMessage)),
-    created: Math.floor(Date.now()/1000),
+    created: Math.floor(Date.now() / 1000),
     model: data.modelVersion ?? model,
     //system_fingerprint: "fp_69829325d0",
     object: "chat.completion",
     usage: data.usageMetadata && transformUsage(data.usageMetadata),
   };
-  if (obj.choices.length === 0 ) {
+  if (obj.choices.length === 0) {
     checkPromptBlock(obj.choices, data.promptFeedback, "message");
   }
   return JSON.stringify(obj);
 };
 
 const responseLineRE = /^data: (.*)(?:\n\n|\r\r|\r\n\r\n)/;
-function parseStream (chunk, controller) {
+function parseStream(chunk, controller) {
   this.buffer += chunk;
   do {
     const match = this.buffer.match(responseLineRE);
@@ -928,7 +928,7 @@ function parseStream (chunk, controller) {
     this.buffer = this.buffer.substring(match[0].length);
   } while (true); // eslint-disable-line no-constant-condition
 }
-function parseStreamFlush (controller) {
+function parseStreamFlush(controller) {
   if (this.buffer) {
     console.error("Invalid data:", this.buffer);
     controller.enqueue(this.buffer);
@@ -938,10 +938,10 @@ function parseStreamFlush (controller) {
 
 const delimiter = "\n\n";
 const sseline = (obj) => {
-  obj.created = Math.floor(Date.now()/1000);
+  obj.created = Math.floor(Date.now() / 1000);
   return "data: " + JSON.stringify(obj) + delimiter;
 };
-async function toOpenAiStream (line, controller) {
+async function toOpenAiStream(line, controller) {
   let data;
   try {
     data = JSON.parse(line);
@@ -950,7 +950,7 @@ async function toOpenAiStream (line, controller) {
     }
   } catch (err) {
     console.error("Error parsing response:", err);
-    if (!this.shared.is_buffers_rest) { line =+ delimiter; }
+    if (!this.shared.is_buffers_rest) { line = + delimiter; }
     controller.enqueue(line); // output as is
     return;
   }
@@ -989,7 +989,7 @@ async function toOpenAiStream (line, controller) {
   cand.delta = {};
   this.last[cand.index] = obj;
 }
-function toOpenAiStreamFlush (controller) {
+function toOpenAiStreamFlush(controller) {
   if (this.last.length > 0) {
     for (const obj of this.last) {
       controller.enqueue(sseline(obj));
