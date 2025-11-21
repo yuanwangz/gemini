@@ -53,6 +53,33 @@ class HttpError extends Error {
   }
 }
 
+class ApiKeyManager {
+  constructor(apiKeyString) {
+    this.keys = apiKeyString ? apiKeyString.split(',').map(k => k.trim()).filter(k => k) : [];
+    this.currentIndex = 0;
+  }
+
+  getCurrent() {
+    return this.keys.length > 0 ? this.keys[this.currentIndex] : null;
+  }
+
+  moveToNext() {
+    if (this.keys.length > 1) {
+      this.currentIndex = (this.currentIndex + 1) % this.keys.length;
+      return true;
+    }
+    return false;
+  }
+
+  getTotalCount() {
+    return this.keys.length;
+  }
+
+  hasMultipleKeys() {
+    return this.keys.length > 1;
+  }
+}
+
 const fixCors = ({ headers, status, statusText }) => {
   headers = new Headers(headers);
   headers.set("Access-Control-Allow-Origin", "*");
@@ -101,18 +128,49 @@ const getRetryDelay = (retryAfter, attempt) => {
   return clampDelay(GEMINI_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1)));
 };
 
-const fetchGeminiWithRetry = async (url, init, retries = GEMINI_RETRY_COUNT) => {
+const fetchGeminiWithRetry = async (url, init, retries = GEMINI_RETRY_COUNT, apiKeyManager = null) => {
   const totalAttempts = retries + 1;
   const requestLabel = describeRequest(url, init);
+
+  // 如果没有传入 apiKeyManager,尝试从 headers 中提取
+  if (!apiKeyManager && init?.headers?.["x-goog-api-key"]) {
+    apiKeyManager = new ApiKeyManager(init.headers["x-goog-api-key"]);
+  }
+
   for (let attempt = 0; attempt < totalAttempts; attempt++) {
+    // 更新当前 API Key
+    if (apiKeyManager && apiKeyManager.getCurrent()) {
+      init.headers = {
+        ...init.headers,
+        "x-goog-api-key": apiKeyManager.getCurrent()
+      };
+    }
+
     try {
       const response = await fetch(url, init);
+
+      // 处理 429 错误 - 切换 API Key
+      if (response.status === 429 && apiKeyManager && apiKeyManager.hasMultipleKeys()) {
+        const previousKey = apiKeyManager.getCurrent();
+        const switched = apiKeyManager.moveToNext();
+        const newKey = apiKeyManager.getCurrent();
+
+        if (switched) {
+          console.warn(`[Gemini] 429 Rate Limit for ${requestLabel}, switching from API key ${previousKey.substring(0, 8)}... to ${newKey.substring(0, 8)}... and retrying`);
+          // 429 时立即重试,不等待
+          continue;
+        }
+      }
+
+      // 处理 503 错误 - 保持当前 API Key
       if (response.status === GEMINI_RETRY_STATUS && attempt < retries) {
         const delay = getRetryDelay(response.headers.get("retry-after"), attempt + 1);
-        console.warn(`[Gemini] 503 ${response.statusText || ""} for ${requestLabel} (attempt ${attempt + 1}/${totalAttempts}), retrying in ${delay}ms`);
+        const currentKey = apiKeyManager && apiKeyManager.getCurrent() ? apiKeyManager.getCurrent().substring(0, 8) + "..." : "default";
+        console.warn(`[Gemini] 503 ${response.statusText || ""} for ${requestLabel} (attempt ${attempt + 1}/${totalAttempts}, key: ${currentKey}), retrying in ${delay}ms`);
         await sleep(delay);
         continue;
       }
+
       if (!response.ok) {
         console.error(`[Gemini] Request failed ${response.status} ${response.statusText || ""} for ${requestLabel}`);
       }
@@ -138,9 +196,10 @@ const makeHeaders = (apiKey, more) => ({
 });
 
 async function handleModels(apiKey) {
+  const apiKeyManager = new ApiKeyManager(apiKey);
   const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/models`, {
-    headers: makeHeaders(apiKey),
-  });
+    headers: makeHeaders(apiKeyManager.getCurrent()),
+  }, GEMINI_RETRY_COUNT, apiKeyManager);
   let { body } = response;
   if (response.ok) {
     const { models } = JSON.parse(await response.text());
@@ -174,9 +233,10 @@ async function handleEmbeddings(req, apiKey) {
   if (!Array.isArray(req.input)) {
     req.input = [req.input];
   }
+  const apiKeyManager = new ApiKeyManager(apiKey);
   const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/${model}:batchEmbedContents`, {
     method: "POST",
-    headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
+    headers: makeHeaders(apiKeyManager.getCurrent(), { "Content-Type": "application/json" }),
     body: JSON.stringify({
       "requests": req.input.map(text => ({
         model,
@@ -245,11 +305,12 @@ async function handleImages(request, apiKey, pathname) {
   const chatRequest = await transformImageRequest(req, isEdit);
 
   // 调用 Gemini API
+  const apiKeyManager = new ApiKeyManager(apiKey);
   const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/models/${DEFAULT_IMAGE_MODEL}:generateContent`, {
     method: "POST",
-    headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
+    headers: makeHeaders(apiKeyManager.getCurrent(), { "Content-Type": "application/json" }),
     body: JSON.stringify(chatRequest),
-  });
+  }, GEMINI_RETRY_COUNT, apiKeyManager);
 
   let { body } = response;
   if (response.ok) {
@@ -308,11 +369,12 @@ async function handleCompletions(req, apiKey) {
   const TASK = req.stream ? "streamGenerateContent" : "generateContent";
   let url = `${BASE_URL}/${API_VERSION}/models/${model}:${TASK}`;
   if (req.stream) { url += "?alt=sse"; }
+  const apiKeyManager = new ApiKeyManager(apiKey);
   const response = await fetchGeminiWithRetry(url, {
     method: "POST",
-    headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
+    headers: makeHeaders(apiKeyManager.getCurrent(), { "Content-Type": "application/json" }),
     body: JSON.stringify(body),
-  });
+  }, GEMINI_RETRY_COUNT, apiKeyManager);
 
   body = response.body;
   if (response.ok) {
