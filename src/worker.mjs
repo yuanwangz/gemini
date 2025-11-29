@@ -533,8 +533,9 @@ const buildAsrPrompt = (task, language, userPrompt) => {
 };
 
 const getAudioMimeType = (file) => {
-  if (file?.type) {
-    return file.type;
+  const normalizedType = file?.type?.toLowerCase();
+  if (normalizedType && normalizedType !== "application/octet-stream") {
+    return normalizedType;
   }
   const name = file?.name || "";
   const ext = name.includes(".") ? name.substring(name.lastIndexOf(".") + 1).toLowerCase() : "";
@@ -546,10 +547,12 @@ const getAudioMimeType = (file) => {
     case "aac":
       return "audio/aac";
     case "ogg":
+    case "oga":
       return "audio/ogg";
     case "flac":
       return "audio/flac";
     case "aiff":
+    case "aif":
       return "audio/aiff";
     default:
       return "audio/mpeg";
