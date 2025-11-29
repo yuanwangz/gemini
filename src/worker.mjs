@@ -36,6 +36,14 @@ export default {
           assert(request.method === "POST");
           return handleImages(request, apiKey, pathname)
             .catch(errHandler);
+        case pathname.endsWith("/audio/transcriptions"):
+          assert(request.method === "POST");
+          return handleAudioTranscription(request, apiKey, { task: "transcribe" })
+            .catch(errHandler);
+        case pathname.endsWith("/audio/translations"):
+          assert(request.method === "POST");
+          return handleAudioTranscription(request, apiKey, { task: "translate" })
+            .catch(errHandler);
         default:
           throw new HttpError("404 Not Found", 404);
       }
@@ -332,6 +340,14 @@ async function handleImages(request, apiKey, pathname) {
 }
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_TRANSCRIPTION_MODEL = DEFAULT_MODEL;
+const ASR_SUPPORTED_RESPONSE_FORMATS = new Set(["json", "text"]);
+const ASR_DEFAULT_RESPONSE_FORMAT = "json";
+const ASR_TASK_PROMPTS = {
+  transcribe: "Generate a verbatim transcript of the provided audio.",
+  translate: "Translate the provided audio into natural English text."
+};
+
 async function handleCompletions(req, apiKey) {
   let model = DEFAULT_MODEL;
   switch (true) {
@@ -413,6 +429,159 @@ async function handleCompletions(req, apiKey) {
   }
   return new Response(body, fixCors(response));
 }
+
+async function handleAudioTranscription(request, apiKey, { task = "transcribe" } = {}) {
+  const contentType = request.headers.get("Content-Type") || "";
+  if (!contentType.includes("multipart/form-data")) {
+    throw new HttpError("Content-Type must be multipart/form-data", 400);
+  }
+  const formData = await request.formData();
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    throw new HttpError("file is required", 400);
+  }
+
+  const responseFormat = (getFormValue(formData, "response_format") || ASR_DEFAULT_RESPONSE_FORMAT).toLowerCase();
+  if (!ASR_SUPPORTED_RESPONSE_FORMATS.has(responseFormat)) {
+    throw new HttpError(`Unsupported response_format: ${responseFormat}`, 400);
+  }
+
+  const requestedModel = getFormValue(formData, "model");
+  const model = resolveGeminiModel(requestedModel, DEFAULT_TRANSCRIPTION_MODEL);
+  const prompt = buildAsrPrompt(task, getFormValue(formData, "language"), getFormValue(formData, "prompt"));
+  const temperature = parseFloat(getFormValue(formData, "temperature"));
+
+  const arrayBuffer = await file.arrayBuffer();
+  if (!arrayBuffer || !arrayBuffer.byteLength) {
+    throw new HttpError("file is empty", 400);
+  }
+  const audioBase64 = Buffer.from(arrayBuffer).toString("base64");
+  const mimeType = getAudioMimeType(file);
+
+  const body = {
+    contents: [{
+      role: "user",
+      parts: [
+        { text: prompt },
+        { inlineData: { mimeType, data: audioBase64 } },
+      ]
+    }],
+    safetySettings,
+  };
+  if (!Number.isNaN(temperature)) {
+    body.generationConfig = { temperature };
+  }
+
+  const apiKeyManager = new ApiKeyManager(apiKey);
+  const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/models/${model}:generateContent`, {
+    method: "POST",
+    headers: makeHeaders(apiKeyManager.getCurrent(), { "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  }, GEMINI_RETRY_COUNT, apiKeyManager);
+
+  let { body: responseBody } = response;
+  if (!response.ok) {
+    return new Response(responseBody, fixCors(response));
+  }
+
+  let geminiPayload;
+  try {
+    geminiPayload = JSON.parse(await response.text());
+  } catch (err) {
+    console.error("Error parsing transcription response:", err);
+    throw new HttpError("Invalid transcription response", 502);
+  }
+  const transcript = extractTranscriptionText(geminiPayload);
+  const { payload, contentType: resultContentType } = formatAsrResponse(transcript, responseFormat);
+
+  const init = fixCors(response);
+  init.headers.set("Content-Type", resultContentType);
+  return new Response(payload, init);
+}
+
+const getFormValue = (formData, key) => {
+  const value = formData.get(key);
+  return typeof value === "string" ? value.trim() : undefined;
+};
+
+const resolveGeminiModel = (model, fallback) => {
+  if (typeof model !== "string") {
+    return fallback;
+  }
+  const trimmed = model.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  if (trimmed.startsWith("models/")) {
+    return trimmed.substring(7);
+  }
+  if (trimmed.startsWith("gemini-") || trimmed.startsWith("gemma-") || trimmed.startsWith("learnlm-")) {
+    return trimmed;
+  }
+  return fallback;
+};
+
+const buildAsrPrompt = (task, language, userPrompt) => {
+  let base = ASR_TASK_PROMPTS[task] || ASR_TASK_PROMPTS.transcribe;
+  if (language) {
+    base += ` The audio language is ${language}.`;
+  }
+  if (userPrompt) {
+    base += ` ${userPrompt}`;
+  }
+  return base;
+};
+
+const getAudioMimeType = (file) => {
+  if (file?.type) {
+    return file.type;
+  }
+  const name = file?.name || "";
+  const ext = name.includes(".") ? name.substring(name.lastIndexOf(".") + 1).toLowerCase() : "";
+  switch (ext) {
+    case "wav":
+      return "audio/wav";
+    case "mp3":
+      return "audio/mpeg";
+    case "aac":
+      return "audio/aac";
+    case "ogg":
+      return "audio/ogg";
+    case "flac":
+      return "audio/flac";
+    case "aiff":
+      return "audio/aiff";
+    default:
+      return "audio/mpeg";
+  }
+};
+
+const extractTranscriptionText = (payload) => {
+  const candidates = payload?.candidates;
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    throw new HttpError("Transcription not available", 502);
+  }
+  for (const candidate of candidates) {
+    const text = (candidate.content?.parts || [])
+      .map(part => part?.text || "")
+      .join("")
+      .trim();
+    if (text) {
+      return text;
+    }
+  }
+  throw new HttpError("Gemini did not return transcription text", 502);
+};
+
+const formatAsrResponse = (text, format) => {
+  if (format === "text") {
+    return { payload: text, contentType: "text/plain; charset=utf-8" };
+  }
+  return {
+    payload: JSON.stringify({ text }, null, 2),
+    contentType: "application/json"
+  };
+};
 
 const adjustProps = (schemaPart) => {
   if (typeof schemaPart !== "object" || schemaPart === null) {
