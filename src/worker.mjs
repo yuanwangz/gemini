@@ -941,12 +941,16 @@ const transformImageRequest = async (req, isEdit) => {
     parts
   }];
 
-  // 解析宽高比: 优先使用 aspect_ratio，其次从 size 转换，最后用默认值
-  let aspectRatio = DEFAULT_ASPECT_RATIO;
+  // 解析宽高比: 优先使用 aspect_ratio，其次从 size 转换
+  // 编辑模式下默认不设置（匹配原图），生成模式下使用默认值
+  let aspectRatio = null;
   if (req.aspect_ratio && VALID_ASPECT_RATIOS.has(req.aspect_ratio)) {
     aspectRatio = req.aspect_ratio;
   } else if (req.size && SIZE_TO_ASPECT_RATIO[req.size]) {
     aspectRatio = SIZE_TO_ASPECT_RATIO[req.size];
+  } else if (!isEdit) {
+    // 仅在生成模式下使用默认宽高比
+    aspectRatio = DEFAULT_ASPECT_RATIO;
   }
 
   // 解析分辨率: 优先使用 image_size，默认 2K
@@ -962,10 +966,14 @@ const transformImageRequest = async (req, isEdit) => {
   const generationConfig = {
     responseModalities: ["IMAGE"],  // 仅返回图片
     imageConfig: {
-      aspectRatio,
       imageSize
     }
   };
+
+  // 仅在指定了宽高比时才添加（编辑模式下可能为 null 以匹配原图）
+  if (aspectRatio) {
+    generationConfig.imageConfig.aspectRatio = aspectRatio;
+  }
 
   if (req.n && req.n > 1) {
     generationConfig.candidateCount = Math.min(req.n, 4); // Gemini 最多支持 4 个候选
