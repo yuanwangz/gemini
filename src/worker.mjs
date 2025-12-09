@@ -270,7 +270,7 @@ async function handleEmbeddings(req, apiKey) {
 }
 
 const DEFAULT_IMAGE_MODEL = "gemini-3-pro-image-preview";
-const DEFAULT_IMAGE_SIZE = "2K";           // 默认生成 2K 分辨率图片
+const DEFAULT_IMAGE_SIZE = "1K";           // 默认生成 2K 分辨率图片
 const DEFAULT_ASPECT_RATIO = "3:4";        // 默认 3:4 竖屏（手机拍照默认比例）
 
 // 支持的宽高比例
