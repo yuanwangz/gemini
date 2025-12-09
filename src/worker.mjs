@@ -270,6 +270,25 @@ async function handleEmbeddings(req, apiKey) {
 }
 
 const DEFAULT_IMAGE_MODEL = "gemini-3-pro-image-preview";
+const DEFAULT_IMAGE_SIZE = "2K";           // 默认生成 2K 分辨率图片
+const DEFAULT_ASPECT_RATIO = "3:4";        // 默认 3:4 竖屏（手机拍照默认比例）
+
+// 支持的宽高比例
+const VALID_ASPECT_RATIOS = new Set([
+  "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
+]);
+
+// 支持的分辨率
+const VALID_IMAGE_SIZES = new Set(["1K", "2K", "4K"]);
+
+// OpenAI 尺寸到 Gemini 宽高比的映射
+const SIZE_TO_ASPECT_RATIO = {
+  "256x256": "1:1",
+  "512x512": "1:1",
+  "1024x1024": "1:1",
+  "1792x1024": "16:9",
+  "1024x1792": "9:16"
+};
 async function handleImages(request, apiKey, pathname) {
   const isEdit = pathname.endsWith("/images/edits");
   let req;
@@ -905,20 +924,6 @@ const transformImageRequest = async (req, isEdit) => {
     prompt = `Generate an image based on the following description: ${prompt}`;
   }
 
-  // 处理尺寸要求
-  if (req.size) {
-    const sizePrompts = {
-      "256x256": "256x256 pixels, square format",
-      "512x512": "512x512 pixels, square format",
-      "1024x1024": "1024x1024 pixels, square format",
-      "1792x1024": "1792x1024 pixels, landscape format",
-      "1024x1792": "1024x1792 pixels, portrait format"
-    };
-    if (sizePrompts[req.size]) {
-      prompt += ` The image should be ${sizePrompts[req.size]}.`;
-    }
-  }
-
   // 处理风格和质量要求
   if (req.style) {
     prompt += ` Style: ${req.style}.`;
@@ -936,8 +941,31 @@ const transformImageRequest = async (req, isEdit) => {
     parts
   }];
 
+  // 解析宽高比: 优先使用 aspect_ratio，其次从 size 转换，最后用默认值
+  let aspectRatio = DEFAULT_ASPECT_RATIO;
+  if (req.aspect_ratio && VALID_ASPECT_RATIOS.has(req.aspect_ratio)) {
+    aspectRatio = req.aspect_ratio;
+  } else if (req.size && SIZE_TO_ASPECT_RATIO[req.size]) {
+    aspectRatio = SIZE_TO_ASPECT_RATIO[req.size];
+  }
+
+  // 解析分辨率: 优先使用 image_size，默认 2K
+  let imageSize = DEFAULT_IMAGE_SIZE;
+  if (req.image_size) {
+    const normalized = req.image_size.toUpperCase();
+    if (VALID_IMAGE_SIZES.has(normalized)) {
+      imageSize = normalized;
+    }
+  }
+
   // 设置生成配置
-  const generationConfig = {};
+  const generationConfig = {
+    responseModalities: ["IMAGE"],  // 仅返回图片
+    imageConfig: {
+      aspectRatio,
+      imageSize
+    }
+  };
 
   if (req.n && req.n > 1) {
     generationConfig.candidateCount = Math.min(req.n, 4); // Gemini 最多支持 4 个候选
