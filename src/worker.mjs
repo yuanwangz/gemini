@@ -437,6 +437,7 @@ async function handleCompletions(req, apiKey) {
       try {
         body = JSON.parse(body);
         if (!body.candidates) {
+          console.error("Gemini response without candidates:", JSON.stringify(body, null, 2));
           throw new Error("Invalid completion object");
         }
       } catch (err) {
