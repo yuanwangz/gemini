@@ -374,7 +374,7 @@ const ASR_TASK_PROMPTS = {
 };
 
 async function handleCompletions(req, apiKey) {
-  console.log("[OpenAI] Incoming request body:", JSON.stringify(req, null, 2));
+  // console.log("[OpenAI] Incoming request body:", JSON.stringify(req, null, 2));
   let model = DEFAULT_MODEL;
   switch (true) {
     case typeof req.model !== "string":
