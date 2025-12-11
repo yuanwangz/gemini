@@ -180,7 +180,13 @@ const fetchGeminiWithRetry = async (url, init, retries = GEMINI_RETRY_COUNT, api
       }
 
       if (!response.ok) {
-        console.error(`[Gemini] Request failed ${response.status} ${response.statusText || ""} for ${requestLabel}`);
+        let errText = "";
+        try {
+          errText = await response.clone().text();
+        } catch (e) {
+          errText = "Failed to read error body";
+        }
+        console.error(`[Gemini] Request failed ${response.status} ${response.statusText || ""} for ${requestLabel}\nError body: ${errText}`);
       }
       return response;
     } catch (err) {
@@ -686,7 +692,7 @@ const transformConfig = (req) => {
   // 默认启用思考总结,确保思考内容被正确标记
   // 对于不支持思考的老模型,这个配置会被忽略
   cfg.thinkingConfig = cfg.thinkingConfig || {};
-  // cfg.thinkingConfig.includeThoughts = true;
+  cfg.thinkingConfig.includeThoughts = true;
 
   if (req.reasoning_effort) {
     cfg.thinkingConfig.thinkingBudget = thinkingBudgetMap[req.reasoning_effort];
