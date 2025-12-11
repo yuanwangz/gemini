@@ -186,7 +186,7 @@ const fetchGeminiWithRetry = async (url, init, retries = GEMINI_RETRY_COUNT, api
         } catch (e) {
           errText = "Failed to read error body";
         }
-        console.error(`[Gemini] Request failed ${response.status} ${response.statusText || ""} for ${requestLabel}\nError body: ${errText}`);
+        console.error(`[Gemini] Request failed ${response.status} ${response.statusText || ""} for ${requestLabel}\nRequest body: ${init.body}\nError body: ${errText}`);
       }
       return response;
     } catch (err) {
@@ -808,7 +808,7 @@ const transformMsg = async ({ content }) => {
   if (!Array.isArray(content)) {
     // system, user: string
     // assistant: string or null (Required unless tool_calls is specified.)
-    parts.push({ text: content });
+    parts.push({ text: content?.toString() ?? " " });
     return parts;
   }
   // user:
