@@ -448,10 +448,11 @@ async function handleCompletions(req, apiKey, hasAppendedEmpty = false) {
           const blockReason = body.promptFeedback?.blockReason;
           if (blockReason && !hasAppendedEmpty) {
             console.warn(`[Gemini] Prompt blocked with reason: ${blockReason}, retrying with appended empty assistant message`);
+            // 深拷贝消息数组，避免 transformMessages 修改原始对象导致 role 被污染
             const modifiedReq = {
               ...req,
               messages: [
-                ...req.messages,
+                ...JSON.parse(JSON.stringify(req.messages)),
                 { role: "assistant", content: " " }
               ]
             };
