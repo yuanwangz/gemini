@@ -896,15 +896,18 @@ const transformMessages = async (messages) => {
         transformFnResponse(item, parts);
         continue;
       case "assistant":
-        item.role = "model";
+      case "model":  // 支持已转换过的 role（重试场景）
+        // 不修改原始 item.role，使用局部变量
         break;
       case "user":
         break;
       default:
         throw new HttpError(`Unknown message role: "${item.role}"`, 400);
     }
+    // assistant/model 统一转为 Gemini 的 model
+    const contentRole = (item.role === "assistant" || item.role === "model") ? "model" : item.role;
     contents.push({
-      role: item.role,
+      role: contentRole,
       parts: item.tool_calls ? transformFnCalls(item) : await transformMsg(item)
     });
   }
