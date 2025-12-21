@@ -1099,6 +1099,16 @@ const transformCandidates = async (key, cand) => {
   let answer = "";
   let reasoning_content = "";
 
+  // 调试：打印原始 parts 结构
+  console.log("[DEBUG transformCandidates] parts:", JSON.stringify(cand.content?.parts?.map(p => ({
+    thought: p.thought,
+    hasText: !!p.text,
+    textPreview: p.text?.substring(0, 100),
+    textLength: p.text?.length,
+    hasFunctionCall: !!p.functionCall,
+    hasInlineData: !!p.inlineData
+  })), null, 2));
+
   for (const part of cand.content?.parts ?? []) {
     if (part.functionCall) {
       const fc = part.functionCall;
