@@ -373,7 +373,7 @@ const ASR_TASK_PROMPTS = {
   translate: "Translate the provided audio into natural English text."
 };
 
-async function handleCompletions(req, apiKey) {
+async function handleCompletions(req, apiKey, hasAppendedEmpty = false) {
   // console.log("[OpenAI] Incoming request body:", JSON.stringify(req, null, 2));
   let model = DEFAULT_MODEL;
   switch (true) {
@@ -444,6 +444,36 @@ async function handleCompletions(req, apiKey) {
       try {
         body = JSON.parse(body);
         if (!body.candidates) {
+          // 检测 PROHIBITED_CONTENT 阻止情况，追加空白 assistant 消息后重试
+          const blockReason = body.promptFeedback?.blockReason;
+          if (blockReason && !hasAppendedEmpty) {
+            console.warn(`[Gemini] Prompt blocked with reason: ${blockReason}, retrying with appended empty assistant message`);
+            const modifiedReq = {
+              ...req,
+              messages: [
+                ...req.messages,
+                { role: "assistant", content: " " }
+              ]
+            };
+            return handleCompletions(modifiedReq, apiKey, true);
+          }
+          // 重试后仍失败，返回空消息响应
+          if (blockReason) {
+            console.warn(`[Gemini] Prompt still blocked after retry: ${blockReason}, returning empty response`);
+            const emptyResponse = {
+              id: id,
+              object: "chat.completion",
+              created: Math.floor(Date.now() / 1000),
+              model: model,
+              choices: [{
+                index: 0,
+                message: { role: "assistant", content: "" },
+                finish_reason: "content_filter"
+              }],
+              usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+            };
+            return new Response(JSON.stringify(emptyResponse), fixCors(response));
+          }
           console.error("Gemini response without candidates:", JSON.stringify(body, null, 2));
           throw new Error("Invalid completion object");
         }
