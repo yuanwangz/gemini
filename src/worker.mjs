@@ -447,13 +447,14 @@ async function handleCompletions(req, apiKey, hasAppendedEmpty = false) {
           // 检测 PROHIBITED_CONTENT 阻止情况，追加空白 assistant 消息后重试
           const blockReason = body.promptFeedback?.blockReason;
           if (blockReason && !hasAppendedEmpty) {
-            console.warn(`[Gemini] Prompt blocked with reason: ${blockReason}, retrying with appended empty assistant message`);
+            console.warn(`[Gemini] Prompt blocked with reason: ${blockReason}, retrying with appended continuation prompt`);
             // 深拷贝消息数组，避免 transformMessages 修改原始对象导致 role 被污染
+            // 使用明确的续接提示，避免模型误将 system prompt 作为回复内容输出
             const modifiedReq = {
               ...req,
               messages: [
                 ...JSON.parse(JSON.stringify(req.messages)),
-                { role: "assistant", content: " " }
+                { role: "assistant", content: "我需要进行有效响应" }
               ]
             };
             return handleCompletions(modifiedReq, apiKey, true);
