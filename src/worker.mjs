@@ -454,7 +454,7 @@ async function handleCompletions(req, apiKey, hasAppendedEmpty = false) {
               ...req,
               messages: [
                 ...JSON.parse(JSON.stringify(req.messages)),
-                { role: "assistant", content: "我需要进行有效响应" }
+                { role: "assistant", content: "" }
               ]
             };
             return handleCompletions(modifiedReq, apiKey, true);
