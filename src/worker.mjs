@@ -1146,6 +1146,15 @@ const transformCandidates = async (key, cand) => {
     }
   }
 
+  // 过滤可能泄露的 system prompt 内容
+  // 如果响应中包含边界标记，截断该标记及其之前的所有内容
+  const boundaryMarker = "---END_OF_INSTRUCTIONS---";
+  const boundaryIndex = answer.indexOf(boundaryMarker);
+  if (boundaryIndex !== -1) {
+    answer = answer.substring(boundaryIndex + boundaryMarker.length).trimStart();
+    console.warn("[Gemini] Detected system prompt leakage, cleaned response content");
+  }
+
   message.content = answer;
   if (reasoning_content != "") {
     message.reasoning_content = reasoning_content;
