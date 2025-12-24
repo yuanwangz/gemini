@@ -885,12 +885,17 @@ const transformMessages = async (messages) => {
         continue;
       case "tool":
         // eslint-disable-next-line no-case-declarations
-        let { role, parts } = contents[contents.length - 1] ?? {};
-        if (role !== "function") {
+        // 多个连续的 OpenAI tool 消息需要合并为 Gemini 的单个 Content（role: "user"）
+        // 使用 parts.isFunctionResponseContainer 标记来判断是否已在收集 function response
+        let { parts } = contents[contents.length - 1] ?? {};
+        if (!parts?.isFunctionResponseContainer) {
+          // 从上一个 assistant/model 消息的 parts 中获取 calls 映射
           const calls = parts?.calls;
-          parts = []; parts.calls = calls;
+          parts = [];
+          parts.calls = calls;
+          parts.isFunctionResponseContainer = true;  // 标记这是 function response 容器
           contents.push({
-            role: "function", // ignored
+            role: "user",  // Gemini 要求 functionResponse 使用 "user" role
             parts
           });
         }
