@@ -943,6 +943,14 @@ const transformTools = (req) => {
         }
       };
     }
+  } else if (tools) {
+    // 当有工具定义但没有指定 tool_choice 时，显式设置 AUTO 模式
+    // 避免依赖 Gemini 的默认行为，减少模型异常输出的可能性
+    tool_config = {
+      function_calling_config: {
+        mode: "AUTO"
+      }
+    };
   }
   return { tools, tool_config };
 };
