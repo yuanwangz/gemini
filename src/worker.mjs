@@ -1115,12 +1115,9 @@ const SEP = "\n\n|>";
 const parseEmbeddedFunctionCalls = (text) => {
   if (!text) return { cleanedText: text, embeddedCalls: [] };
 
-  // 替换 <ctrl##> 控制字符为对应的 ASCII 字符
-  // <ctrl46> = '.' (ASCII 46)
-  let cleaned = text.replace(/<ctrl(\d+)>/g, (match, code) => {
-    const charCode = parseInt(code, 10);
-    return String.fromCharCode(charCode);
-  });
+  // <ctrl##> 是 Gemini 用来包围值的分隔符（类似引号的作用）
+  // 需要直接移除，而不是替换成对应字符
+  let cleaned = text.replace(/<ctrl\d+>/g, '');
 
   // 检测 call:function_name{...} 格式的嵌入式函数调用
   // 使用非贪婪匹配来处理可能的嵌套情况
@@ -1142,7 +1139,6 @@ const parseEmbeddedFunctionCalls = (text) => {
       if (colonIndex > 0) {
         const key = pair.substring(0, colonIndex).trim();
         let value = pair.substring(colonIndex + 1).trim();
-        // 如果值没有引号包围，可能是字符串，保持原样
         args[key] = value;
       }
     }
