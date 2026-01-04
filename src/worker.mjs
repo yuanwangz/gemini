@@ -1100,6 +1100,64 @@ async function uploadImageToHost(base64Data, authToken) {
   }
 }
 const SEP = "\n\n|>";
+
+// 解析并提取文本中嵌入的函数调用格式
+// Gemini 有时会在文本中直接输出 call:function_name{...} 格式，而不是通过结构化 functionCall 返回
+// 这是 Gemini API 的已知问题，需要手动解析并转换为标准 tool_calls 格式
+const parseEmbeddedFunctionCalls = (text) => {
+  if (!text) return { cleanedText: text, embeddedCalls: [] };
+
+  // 替换 <ctrl##> 控制字符为对应的 ASCII 字符
+  // <ctrl46> = '.' (ASCII 46)
+  let cleaned = text.replace(/<ctrl(\d+)>/g, (match, code) => {
+    const charCode = parseInt(code, 10);
+    return String.fromCharCode(charCode);
+  });
+
+  // 检测 call:function_name{...} 格式的嵌入式函数调用
+  // 使用非贪婪匹配来处理可能的嵌套情况
+  const embeddedCallPattern = /call:(\w+)\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/g;
+  const embeddedCalls = [];
+  let match;
+
+  while ((match = embeddedCallPattern.exec(cleaned)) !== null) {
+    const [fullMatch, functionName, argsString] = match;
+    console.warn(`[Gemini] Detected embedded function call in text: ${functionName}`);
+
+    // 尝试解析参数
+    // 格式是 key1:value1,key2:value2 这种非标准格式
+    const args = {};
+    // 分割参数，但要考虑值中可能包含逗号的情况
+    const argPairs = argsString.split(/,(?=\w+:)/);
+    for (const pair of argPairs) {
+      const colonIndex = pair.indexOf(':');
+      if (colonIndex > 0) {
+        const key = pair.substring(0, colonIndex).trim();
+        let value = pair.substring(colonIndex + 1).trim();
+        // 如果值没有引号包围，可能是字符串，保持原样
+        args[key] = value;
+      }
+    }
+
+    embeddedCalls.push({
+      id: "call_" + generateId(),
+      type: "function",
+      function: {
+        name: functionName,
+        arguments: JSON.stringify(args)
+      }
+    });
+  }
+
+  // 从文本中移除已解析的函数调用
+  if (embeddedCalls.length > 0) {
+    cleaned = cleaned.replace(embeddedCallPattern, '').trim();
+    console.warn(`[Gemini] Extracted ${embeddedCalls.length} embedded function call(s) and converted to tool_calls`);
+  }
+
+  return { cleanedText: cleaned, embeddedCalls };
+};
+
 const transformCandidates = async (key, cand) => {
   const message = { role: "assistant", content: [] };
   let answer = "";
@@ -1158,6 +1216,17 @@ const transformCandidates = async (key, cand) => {
   if (boundaryIndex !== -1) {
     answer = answer.substring(boundaryIndex + boundaryMarker.length).trimStart();
     console.warn("[Gemini] Detected system prompt leakage, cleaned response content");
+  }
+
+  // 解析文本中可能嵌入的函数调用格式，并转换为标准 tool_calls
+  // 这是对 Gemini API 不稳定行为的容错处理
+  const { cleanedText, embeddedCalls } = parseEmbeddedFunctionCalls(answer);
+  answer = cleanedText;
+
+  // 如果从文本中解析出了函数调用，添加到 tool_calls 中
+  if (embeddedCalls.length > 0) {
+    message.tool_calls = message.tool_calls ?? [];
+    message.tool_calls.push(...embeddedCalls);
   }
 
   message.content = answer;
