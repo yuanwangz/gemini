@@ -186,7 +186,8 @@ const fetchGeminiWithRetry = async (url, init, retries = GEMINI_RETRY_COUNT, api
         } catch (e) {
           errText = "Failed to read error body";
         }
-        console.error(`[Gemini] Request failed ${response.status} ${response.statusText || ""} for ${requestLabel}\nRequest body: ${init.body}\nError body: ${errText}`);
+        // 不打印请求体，避免泄露敏感的提示词信息
+        console.error(`[Gemini] Request failed ${response.status} ${response.statusText || ""} for ${requestLabel}\nError body: ${errText}`);
       }
       return response;
     } catch (err) {
