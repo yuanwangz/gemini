@@ -307,7 +307,8 @@ async function handleEmbeddings(req, apiKey) {
     model: req.model,
   }, null, "  ");
 
-  return new Response(body, fixCors({ headers: new Headers(), status: 200 }));
+  const respHeaders = new Headers({ "Content-Type": "application/json" });
+  return new Response(body, fixCors({ headers: respHeaders, status: 200 }));
 }
 
 const DEFAULT_IMAGE_MODEL = "gemini-3-pro-image-preview";
