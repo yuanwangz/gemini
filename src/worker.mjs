@@ -270,7 +270,7 @@ async function handleEmbeddings(req, apiKey) {
   if (batchResponse.ok) {
     // 批量请求成功（付费层级）
     const batchResult = JSON.parse(await batchResponse.text());
-    console.log(`[Embedding] batchEmbedContents 响应结构:`, JSON.stringify(batchResult).substring(0, 500));
+    // console.log(`[Embedding] batchEmbedContents 响应结构:`, JSON.stringify(batchResult).substring(0, 500));
     embeddings = batchResult.embeddings;
   } else {
     // batchEmbedContents 失败，降级为逐个 embedContent 调用（免费层级兼容）
@@ -290,7 +290,7 @@ async function handleEmbeddings(req, apiKey) {
           throw new HttpError(`embedContent failed: ${resp.status} ${errText}`, resp.status);
         }
         const result = JSON.parse(await resp.text());
-        console.log(`[Embedding] embedContent 响应结构:`, JSON.stringify(result).substring(0, 500));
+        // console.log(`[Embedding] embedContent 响应结构:`, JSON.stringify(result).substring(0, 500));
         return result.embedding;
       })
     );
