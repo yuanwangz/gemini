@@ -106,6 +106,7 @@ const handleOPTIONS = async () => {
 
 // const BASE_URL = "https://generativelanguage.googleapis.com";
 const BASE_URL = "http://bdjbt.12342234.xyz:8317";
+const EMBEDDING_BASE_URL = "https://generativelanguage.googleapis.com";
 const API_VERSION = "v1beta";
 const GEMINI_RETRY_COUNT = 5;
 const GEMINI_RETRY_STATUS = 503;
@@ -250,7 +251,8 @@ async function handleEmbeddings(req, apiKey) {
     req.input = [req.input];
   }
   const apiKeyManager = new ApiKeyManager(apiKey);
-  const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/${model}:batchEmbedContents`, {
+  // const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/${model}:batchEmbedContents`, {
+  const response = await fetchGeminiWithRetry(`${EMBEDDING_BASE_URL}/${API_VERSION}/${model}:embedContent`, {
     method: "POST",
     headers: makeHeaders(apiKeyManager.getCurrent(), { "Content-Type": "application/json" }),
     body: JSON.stringify({
