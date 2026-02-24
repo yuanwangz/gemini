@@ -234,6 +234,7 @@ async function handleModels(apiKey) {
 }
 
 const DEFAULT_EMBEDDINGS_MODEL = "gemini-embedding-001";
+
 async function handleEmbeddings(req, apiKey) {
   if (typeof req.model !== "string") {
     throw new HttpError("model is not specified", 400);
@@ -251,8 +252,10 @@ async function handleEmbeddings(req, apiKey) {
     req.input = [req.input];
   }
   const apiKeyManager = new ApiKeyManager(apiKey);
-  // const response = await fetchGeminiWithRetry(`${BASE_URL}/${API_VERSION}/${model}:batchEmbedContents`, {
-  const response = await fetchGeminiWithRetry(`${EMBEDDING_BASE_URL}/${API_VERSION}/${model}:embedContent`, {
+
+  let embeddings;
+  // 先尝试 batchEmbedContents（付费层级），保持原有请求逻辑
+  const batchResponse = await fetchGeminiWithRetry(`${EMBEDDING_BASE_URL}/${API_VERSION}/${model}:batchEmbedContents`, {
     method: "POST",
     headers: makeHeaders(apiKeyManager.getCurrent(), { "Content-Type": "application/json" }),
     body: JSON.stringify({
@@ -262,21 +265,47 @@ async function handleEmbeddings(req, apiKey) {
         outputDimensionality: req.dimensions,
       }))
     })
-  });
-  let { body } = response;
-  if (response.ok) {
-    const { embeddings } = JSON.parse(await response.text());
-    body = JSON.stringify({
-      object: "list",
-      data: embeddings.map(({ values }, index) => ({
-        object: "embedding",
-        index,
-        embedding: values,
-      })),
-      model: req.model,
-    }, null, "  ");
+  }, GEMINI_RETRY_COUNT, apiKeyManager);
+
+  if (batchResponse.ok) {
+    // 批量请求成功（付费层级）
+    const { embeddings: batchEmbeddings } = JSON.parse(await batchResponse.text());
+    embeddings = batchEmbeddings;
+  } else {
+    // batchEmbedContents 失败，降级为逐个 embedContent 调用（免费层级兼容）
+    console.warn(`[Embedding] batchEmbedContents 失败 (${batchResponse.status})，降级为逐个 embedContent 调用 (共${req.input.length}个)`);
+    const singleResults = await Promise.all(
+      req.input.map(async (text) => {
+        const resp = await fetchGeminiWithRetry(`${EMBEDDING_BASE_URL}/${API_VERSION}/${model}:embedContent`, {
+          method: "POST",
+          headers: makeHeaders(apiKeyManager.getCurrent(), { "Content-Type": "application/json" }),
+          body: JSON.stringify({
+            content: { parts: [{ text }] },
+            ...(req.dimensions && { outputDimensionality: req.dimensions }),
+          })
+        }, GEMINI_RETRY_COUNT, apiKeyManager);
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new HttpError(`embedContent failed: ${resp.status} ${errText}`, resp.status);
+        }
+        const result = JSON.parse(await resp.text());
+        return result.embedding;
+      })
+    );
+    embeddings = singleResults;
   }
-  return new Response(body, fixCors(response));
+
+  const body = JSON.stringify({
+    object: "list",
+    data: embeddings.map(({ values }, index) => ({
+      object: "embedding",
+      index,
+      embedding: values,
+    })),
+    model: req.model,
+  }, null, "  ");
+
+  return new Response(body, fixCors({ headers: new Headers(), status: 200 }));
 }
 
 const DEFAULT_IMAGE_MODEL = "gemini-3-pro-image-preview";
