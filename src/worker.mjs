@@ -105,7 +105,7 @@ const handleOPTIONS = async () => {
 };
 
 // const BASE_URL = "https://generativelanguage.googleapis.com";
-const BASE_URL = "http://bdjbt.12342234.xyz:8317";
+const BASE_URL = "https://cli.12342234.xyz";
 const EMBEDDING_BASE_URL = "https://generativelanguage.googleapis.com";
 const API_VERSION = "v1beta";
 const GEMINI_RETRY_COUNT = 5;
